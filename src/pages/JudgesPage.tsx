@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown, Network } from 'lucide-react';
 import { useDebateStore } from '@/store/debateStore';
+import { AvoidanceNetworkGraph } from '@/components/judges/AvoidanceNetworkGraph';
 import Modal from '@/components/ui/Modal';
 import Empty from '@/components/ui/Empty';
 import type { Judge } from '@/types';
@@ -65,6 +66,10 @@ export default function JudgesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JudgeFormState>(emptyForm);
+  /**
+   * 视图模式：'list' 列表视图 | 'graph' 关系图视图
+   */
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
   const teamOptions = useMemo(
     () => teams.filter((t) => !t.id.startsWith('__')).map((t) => ({ id: t.id, label: t.name })), [teams],
@@ -121,75 +126,102 @@ export default function JudgesPage() {
             <p className="text-sm text-navy-500">共 {judges.length} 位评委</p>
           </div>
         </div>
-        <button onClick={openAdd} className="btn-primary">
-          <Plus className="h-4 w-4" />新增评委
-        </button>
-      </div>
-
-      <div className="card p-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400" />
-          <input value={keyword} onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜索姓名或所属机构..." className="input-base pl-10" />
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="card">
-          <Empty title={keyword ? '未找到匹配的评委' : '暂无评委'}
-            description={keyword ? '请尝试其他关键词' : '点击右上角按钮添加第一位评委'} />
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-navy-50 text-left text-navy-700">
-                  <th className="px-5 py-3 font-semibold">姓名</th>
-                  <th className="px-5 py-3 font-semibold">所属机构</th>
-                  <th className="px-5 py-3 font-semibold">职称</th>
-                  <th className="px-5 py-3 font-semibold">回避队伍</th>
-                  <th className="px-5 py-3 font-semibold">回避机构</th>
-                  <th className="px-5 py-3 font-semibold">回避选手</th>
-                  <th className="px-5 py-3 text-right font-semibold">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((j, idx) => (
-                  <tr key={j.id} className={cn(
-                    'border-t border-navy-100 transition-colors hover:bg-ivory-50',
-                    idx % 2 === 1 && 'bg-ivory-50/40',
-                  )}>
-                    <td className="px-5 py-3.5 font-medium text-navy-900">{j.name}</td>
-                    <td className="px-5 py-3.5 text-navy-700">{j.institution}</td>
-                    <td className="px-5 py-3.5 text-navy-600">{j.title || '—'}</td>
-                    <td className="px-5 py-3.5">
-                      <span className="badge-blue"><Check className="h-3 w-3" />{j.avoidTeams.length}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="badge-gold"><Check className="h-3 w-3" />{j.avoidInstitutions.length}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="badge-green"><Check className="h-3 w-3" />{j.avoidPlayers.length}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(j)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-500 transition-colors hover:bg-navy-50 hover:text-navy-700" aria-label="编辑">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => removeJudge(j.id)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="删除">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="flex items-center gap-2">
+          {/* 视图切换 */}
+          <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1 mr-2">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'
+              }`}
+            >
+              <Scale className="w-3.5 h-3.5" />列表
+            </button>
+            <button
+              onClick={() => setViewMode('graph')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                viewMode === 'graph' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'
+              }`}
+            >
+              <Network className="w-3.5 h-3.5" />关系图
+            </button>
           </div>
+          <button onClick={openAdd} className="btn-primary">
+            <Plus className="h-4 w-4" />新增评委
+          </button>
         </div>
+      </div>
+
+      {viewMode === 'graph' ? (
+        <AvoidanceNetworkGraph />
+      ) : (
+        <>
+          <div className="card p-4">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400" />
+              <input value={keyword} onChange={(e) => setKeyword(e.target.value)}
+                placeholder="搜索姓名或所属机构..." className="input-base pl-10" />
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="card">
+              <Empty title={keyword ? '未找到匹配的评委' : '暂无评委'}
+                description={keyword ? '请尝试其他关键词' : '点击右上角按钮添加第一位评委'} />
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-navy-50 text-left text-navy-700">
+                      <th className="px-5 py-3 font-semibold">姓名</th>
+                      <th className="px-5 py-3 font-semibold">所属机构</th>
+                      <th className="px-5 py-3 font-semibold">职称</th>
+                      <th className="px-5 py-3 font-semibold">回避队伍</th>
+                      <th className="px-5 py-3 font-semibold">回避机构</th>
+                      <th className="px-5 py-3 font-semibold">回避选手</th>
+                      <th className="px-5 py-3 text-right font-semibold">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((j, idx) => (
+                      <tr key={j.id} className={cn(
+                        'border-t border-navy-100 transition-colors hover:bg-ivory-50',
+                        idx % 2 === 1 && 'bg-ivory-50/40',
+                      )}>
+                        <td className="px-5 py-3.5 font-medium text-navy-900">{j.name}</td>
+                        <td className="px-5 py-3.5 text-navy-700">{j.institution}</td>
+                        <td className="px-5 py-3.5 text-navy-600">{j.title || '—'}</td>
+                        <td className="px-5 py-3.5">
+                          <span className="badge-blue"><Check className="h-3 w-3" />{j.avoidTeams.length}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="badge-gold"><Check className="h-3 w-3" />{j.avoidInstitutions.length}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className="badge-green"><Check className="h-3 w-3" />{j.avoidPlayers.length}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openEdit(j)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-navy-500 transition-colors hover:bg-navy-50 hover:text-navy-700" aria-label="编辑">
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => removeJudge(j.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="删除">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}

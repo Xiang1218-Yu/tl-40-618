@@ -81,6 +81,20 @@ interface DebateState {
   regenerateAllMatches: () => void;
   generateNextRound: () => void;
   updateMatch: (id: string, patch: Partial<MatchPairing>) => void;
+  /**
+   * 交换两场比赛中的队伍（用于拖拽微调对阵）
+   * 支持：同场正反方交换、跨场队伍交换
+   */
+  swapMatchTeams: (
+    sourceMatchId: string,
+    sourceSide: 'pro' | 'con',
+    targetMatchId: string,
+    targetSide: 'pro' | 'con'
+  ) => void;
+  /**
+   * 批量更新多场比赛（拖拽完成后一次性保存）
+   */
+  batchUpdateMatches: (updates: { id: string; patch: Partial<MatchPairing> }[]) => void;
 
   checkMatchConflicts: (matchId: string) => AvoidanceConflict[];
 
@@ -324,6 +338,52 @@ export const useDebateStore = create<DebateState>()(
         set((s) => ({
           matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
+
+      /**
+       * 交换两场比赛中的队伍
+       * 职责：仅处理队伍ID交换，不涉及UI拖拽逻辑（单一职责）
+       */
+      swapMatchTeams: (sourceMatchId, sourceSide, targetMatchId, targetSide) => {
+        set((s) => {
+          const matches = [...s.matches];
+          const sourceIdx = matches.findIndex((m) => m.id === sourceMatchId);
+          const targetIdx = matches.findIndex((m) => m.id === targetMatchId);
+
+          if (sourceIdx === -1 || targetIdx === -1) return s;
+
+          const sourceMatch = { ...matches[sourceIdx] };
+          const targetMatch = { ...matches[targetIdx] };
+
+          const sourceKey = sourceSide === 'pro' ? 'proTeamId' : 'conTeamId';
+          const targetKey = targetSide === 'pro' ? 'proTeamId' : 'conTeamId';
+
+          const sourceTeamId = sourceMatch[sourceKey];
+          const targetTeamId = targetMatch[targetKey];
+
+          sourceMatch[sourceKey] = targetTeamId;
+          targetMatch[targetKey] = sourceTeamId;
+
+          matches[sourceIdx] = sourceMatch;
+          matches[targetIdx] = targetMatch;
+
+          return { matches };
+        });
+      },
+
+      /**
+       * 批量更新比赛（原子操作，避免多次渲染）
+       */
+      batchUpdateMatches: (updates) =>
+        set((s) => {
+          let matches = [...s.matches];
+          updates.forEach(({ id, patch }) => {
+            const idx = matches.findIndex((m) => m.id === id);
+            if (idx !== -1) {
+              matches[idx] = { ...matches[idx], ...patch };
+            }
+          });
+          return { matches };
+        }),
 
       checkMatchConflicts: (matchId) => {
         const s = get();

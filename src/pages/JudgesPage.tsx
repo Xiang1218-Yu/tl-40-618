@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown, Network } from 'lucide-react';
 import { useDebateStore } from '@/store/debateStore';
 import Modal from '@/components/ui/Modal';
 import Empty from '@/components/ui/Empty';
+import { AvoidanceRelationalGraph } from '@/components/judges/AvoidanceRelationalGraph';
 import type { Judge } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ export default function JudgesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JudgeFormState>(emptyForm);
+  const [showGraph, setShowGraph] = useState(false);
 
   const teamOptions = useMemo(
     () => teams.filter((t) => !t.id.startsWith('__')).map((t) => ({ id: t.id, label: t.name })), [teams],
@@ -121,10 +123,26 @@ export default function JudgesPage() {
             <p className="text-sm text-navy-500">共 {judges.length} 位评委</p>
           </div>
         </div>
-        <button onClick={openAdd} className="btn-primary">
-          <Plus className="h-4 w-4" />新增评委
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowGraph(!showGraph)}
+            className={cn(
+              'btn-secondary flex items-center gap-2',
+              showGraph && 'bg-navy-100 text-navy-800'
+            )}
+          >
+            <Network className="h-4 w-4" />
+            {showGraph ? '隐藏关系图' : '查看回避关系图'}
+          </button>
+          <button onClick={openAdd} className="btn-primary">
+            <Plus className="h-4 w-4" />新增评委
+          </button>
+        </div>
       </div>
+
+      {showGraph && (
+        <AvoidanceRelationalGraph judges={judges} teams={teams} />
+      )}
 
       <div className="card p-4">
         <div className="relative max-w-md">

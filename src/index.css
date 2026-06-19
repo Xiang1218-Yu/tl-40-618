@@ -1,0 +1,221 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700;900&family=Roboto+Mono:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color-scheme: light;
+  background-color: #FAF7F0;
+  color: #0F2944;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: #FAF7F0;
+}
+
+@layer base {
+  h1 {
+    @apply font-serif text-3xl font-bold text-navy-900;
+  }
+  h2 {
+    @apply font-serif text-2xl font-semibold text-navy-900;
+  }
+  h3 {
+    @apply font-serif text-xl font-semibold text-navy-800;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg
+           bg-gradient-navy text-white font-medium text-sm
+           shadow-card hover:shadow-card-hover hover:-translate-y-0.5
+           active:translate-y-0 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg
+           bg-white border border-navy-200 text-navy-800 font-medium text-sm
+           shadow-sm hover:bg-navy-50 hover:border-navy-300 hover:-translate-y-0.5
+           transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg
+           bg-gradient-gold text-white font-medium text-sm
+           shadow-card hover:shadow-card-hover hover:-translate-y-0.5
+           active:translate-y-0 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg
+           bg-red-50 border border-red-200 text-red-600 font-medium text-sm
+           hover:bg-red-100 transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-card border border-navy-100/60
+           hover:shadow-card-hover transition-all duration-300;
+  }
+
+  .card-navy {
+    @apply rounded-xl bg-gradient-navy text-white shadow-card
+           hover:shadow-card-hover transition-all duration-300;
+  }
+
+  .input-base {
+    @apply w-full px-4 py-2.5 rounded-lg border border-navy-200 bg-white
+           text-navy-900 text-sm placeholder:text-navy-400
+           focus:outline-none focus:ring-2 focus:ring-gold-400/50 focus:border-gold-400
+           transition-all duration-150;
+  }
+
+  .label-base {
+    @apply block text-sm font-medium text-navy-700 mb-1.5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20;
+  }
+
+  .badge-red {
+    @apply badge bg-red-50 text-red-700 ring-1 ring-red-600/20;
+  }
+
+  .badge-blue {
+    @apply badge bg-navy-50 text-navy-700 ring-1 ring-navy-600/20;
+  }
+
+  .badge-gold {
+    @apply badge bg-gold-50 text-gold-700 ring-1 ring-gold-600/30;
+  }
+
+  .sidebar-nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium
+           text-navy-400 hover:text-navy-900 hover:bg-navy-50
+           transition-all duration-150 cursor-pointer;
+  }
+
+  .sidebar-nav-item-active {
+    @apply bg-gradient-navy text-white hover:text-white hover:bg-gradient-navy shadow-card;
+  }
+
+  .stagger-fade-in > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fadeUp 0.5s ease-out forwards;
+  }
+  .stagger-fade-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-fade-in > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger-fade-in > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger-fade-in > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger-fade-in > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger-fade-in > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger-fade-in > *:nth-child(7) { animation-delay: 240ms; }
+  .stagger-fade-in > *:nth-child(8) { animation-delay: 280ms; }
+  .stagger-fade-in > *:nth-child(9) { animation-delay: 320ms; }
+  .stagger-fade-in > *:nth-child(10) { animation-delay: 360ms; }
+
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #b8cfe8 transparent;
+  }
+  .scroll-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: #b8cfe8;
+    border-radius: 3px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: #8aafd6;
+  }
+
+  .range-slider {
+    @apply w-full h-2 rounded-lg bg-navy-100 appearance-none cursor-pointer;
+  }
+  .range-slider::-webkit-slider-thumb {
+    @apply appearance-none w-5 h-5 rounded-full bg-gradient-navy border-2 border-white
+           shadow-md cursor-pointer transition-transform hover:scale-110;
+  }
+}
+
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes timerPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes timerPulseUrgent {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.timer-pulse {
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
+.timer-urgent {
+  animation: timerPulseUrgent 0.6s ease-in-out infinite;
+  color: #EF4444 !important;
+}
+
+@keyframes danmakuScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-100% - 100vw));
+  }
+}
+
+.danmaku-scroll {
+  animation-name: danmakuScroll;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  will-change: transform;
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-scale {
+  animation: fadeInScale 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

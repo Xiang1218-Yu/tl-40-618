@@ -181,19 +181,17 @@ export default function TournamentPage() {
             <p className="text-sm text-navy-500 mt-0.5">配置赛事参数并自动生成对阵，支持拖拽微调</p>
           </div>
           <div className="flex items-center gap-2">
-            {!isSingleElim && (
-              <button
-                onClick={() => setEditMode(!editMode)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  editMode
-                    ? 'bg-gold-100 text-gold-700 border border-gold-200'
-                    : 'bg-navy-50 text-navy-600 border border-navy-200'
-                }`}
-              >
-                <GripVertical className="w-3.5 h-3.5" />
-                {editMode ? '微调模式（开）' : '微调模式（关）'}
-              </button>
-            )}
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                editMode
+                  ? 'bg-gold-100 text-gold-700 border border-gold-200'
+                  : 'bg-navy-50 text-navy-600 border border-navy-200'
+              }`}
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+              {editMode ? '微调模式（开）' : '微调模式（关）'}
+            </button>
             {isSingleElim && (
               <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
                 <button
@@ -278,14 +276,15 @@ export default function TournamentPage() {
           </div>
         </div>
 
-        {editMode && !isSingleElim && roundMatches.length > 0 && (
+        {editMode && roundMatches.length > 0 && (
           <div className="mb-4 rounded-lg bg-emerald-50/70 border border-emerald-200 p-3">
             <div className="flex items-start gap-2">
               <GripVertical className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-xs font-semibold text-emerald-700">拖拽微调模式已开启</p>
                 <p className="text-[11px] text-emerald-600 mt-0.5">
-                  拖拽队伍卡片可在不同场次间交换队伍位置；同一场次内拖拽可交换正反方立场；点击 ↔ 按钮也可快速交换立场；点击 ↻ 按钮自动重新分配评委
+                  拖拽队伍卡片可在不同场次间交换队伍位置；同一场次内拖拽可交换正反方立场；点击 ↔ 按钮快速交换立场；点击 ↻ 按钮自动重新分配评委
+                  {isSingleElim && viewMode === 'tree' && '（请切换至列表视图进行拖拽微调）'}
                 </p>
               </div>
             </div>
@@ -339,7 +338,7 @@ export default function TournamentPage() {
               <BracketView matches={matches} getTeamById={getTeamById} />
             ) : roundMatches.length === 0 ? (
               <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
-            ) : editMode && !isSingleElim ? (
+            ) : editMode ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-fade-in">
                 {roundMatches.map((m) => (
                   <EditableMatchCard

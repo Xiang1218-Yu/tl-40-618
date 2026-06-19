@@ -432,6 +432,7 @@ export const advanceSingleElimination = (
 /**
  * 交换两场比赛中指定侧的队伍
  * 用于拖拽微调对阵表
+ * 职责：完成队伍交换后，重新为两场比赛分配评委（避开回避关系，且同轮次不重复分配）
  */
 export const swapMatchTeams = (
   pairings: MatchPairing[],
@@ -441,19 +442,18 @@ export const swapMatchTeams = (
   sideB: 'pro' | 'con',
   teams: Team[],
   judges: Judge[],
-  judgesPerMatch: number
+  judgesPerMatch: number,
+  otherMatchesSameRound: MatchPairing[]
 ): MatchPairing[] => {
-  return pairings.map((m) => {
+  // 先完成队伍位置交换，得到中间结果
+  const afterSwap = pairings.map((m) => {
     if (m.id === matchIdA) {
       const matchB = pairings.find((x) => x.id === matchIdB);
       if (!matchB) return m;
       const teamIdB = sideB === 'pro' ? matchB.proTeamId : matchB.conTeamId;
       const proTeamId = sideA === 'pro' ? teamIdB : m.proTeamId;
       const conTeamId = sideA === 'con' ? teamIdB : m.conTeamId;
-      const proTeam = teams.find((t) => t.id === proTeamId) ?? null;
-      const conTeam = teams.find((t) => t.id === conTeamId) ?? null;
-      const newJudgeIds = assignJudges(proTeam, conTeam, judges, [], judgesPerMatch).map((j) => j.id);
-      return { ...m, proTeamId, conTeamId, judgeIds: newJudgeIds };
+      return { ...m, proTeamId, conTeamId };
     }
     if (m.id === matchIdB) {
       const matchA = pairings.find((x) => x.id === matchIdA);
@@ -461,28 +461,63 @@ export const swapMatchTeams = (
       const teamIdA = sideA === 'pro' ? matchA.proTeamId : matchA.conTeamId;
       const proTeamId = sideB === 'pro' ? teamIdA : m.proTeamId;
       const conTeamId = sideB === 'con' ? teamIdA : m.conTeamId;
-      const proTeam = teams.find((t) => t.id === proTeamId) ?? null;
-      const conTeam = teams.find((t) => t.id === conTeamId) ?? null;
-      const newJudgeIds = assignJudges(proTeam, conTeam, judges, [], judgesPerMatch).map((j) => j.id);
-      return { ...m, proTeamId, conTeamId, judgeIds: newJudgeIds };
+      return { ...m, proTeamId, conTeamId };
     }
+    return m;
+  });
+
+  // 收集其他比赛已分配的评委（不包含正在处理的两场）
+  const otherAssigned = otherMatchesSameRound
+    .filter((m) => m.id !== matchIdA && m.id !== matchIdB)
+    .flatMap((m) => m.judgeIds);
+
+  // 为比赛A分配评委
+  const matchA = afterSwap.find((m) => m.id === matchIdA);
+  const matchB = afterSwap.find((m) => m.id === matchIdB);
+  if (!matchA || !matchB) return afterSwap;
+
+  const proTeamA = teams.find((t) => t.id === matchA.proTeamId) ?? null;
+  const conTeamA = teams.find((t) => t.id === matchA.conTeamId) ?? null;
+  const judgesForA = assignJudges(proTeamA, conTeamA, judges, otherAssigned, judgesPerMatch).map((j) => j.id);
+
+  // 为比赛B分配评委（不能使用A已选的和其他场次的）
+  const assignedForA = new Set([...otherAssigned, ...judgesForA]);
+  const proTeamB = teams.find((t) => t.id === matchB.proTeamId) ?? null;
+  const conTeamB = teams.find((t) => t.id === matchB.conTeamId) ?? null;
+  const judgesForB = assignJudges(proTeamB, conTeamB, judges, Array.from(assignedForA), judgesPerMatch).map((j) => j.id);
+
+  return afterSwap.map((m) => {
+    if (m.id === matchIdA) return { ...m, judgeIds: judgesForA };
+    if (m.id === matchIdB) return { ...m, judgeIds: judgesForB };
     return m;
   });
 };
 
 /**
- * 交换单场比赛中正方与反方的立场
+ * 为单场比赛交换正反方后重新分配评委
  */
-export const swapMatchSides = (
+export const swapMatchSidesAndReassignJudges = (
   pairings: MatchPairing[],
-  matchId: string
+  matchId: string,
+  teams: Team[],
+  judges: Judge[],
+  judgesPerMatch: number,
+  otherMatchesSameRound: MatchPairing[]
 ): MatchPairing[] => {
+  const alreadyAssigned = otherMatchesSameRound
+    .filter((m) => m.id !== matchId)
+    .flatMap((m) => m.judgeIds);
+
   return pairings.map((m) => {
     if (m.id !== matchId) return m;
+    const proTeam = teams.find((t) => t.id === m.conTeamId) ?? null;
+    const conTeam = teams.find((t) => t.id === m.proTeamId) ?? null;
+    const newJudgeIds = assignJudges(proTeam, conTeam, judges, alreadyAssigned, judgesPerMatch).map((j) => j.id);
     return {
       ...m,
       proTeamId: m.conTeamId,
       conTeamId: m.proTeamId,
+      judgeIds: newJudgeIds,
     };
   });
 };

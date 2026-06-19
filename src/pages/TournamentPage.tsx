@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useDebateStore } from '@/store/debateStore';
 import { MatchCard } from '@/components/cards/MatchCard';
+import { EditableMatchCard } from '@/components/tournament/EditableMatchCard';
+import type { DragLocation } from '@/components/tournament/DraggableTeamSlot';
 import Empty from '@/components/ui/Empty';
-import { AlertTriangle, Swords, ListTree, Sparkles, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Swords, ListTree, Sparkles, RefreshCw, GripVertical } from 'lucide-react';
 import type { DebateFormat, TournamentType, MatchPairing, Team } from '@/types';
 
 const formatOptions: { value: DebateFormat; label: string }[] = [
@@ -18,6 +20,10 @@ const typeOptions: { value: TournamentType; label: string }[] = [
   { value: 'round_robin', label: '循环赛' },
 ];
 
+/**
+ * 冲突告警组件
+ * 单一职责：展示单场比赛的回避冲突
+ */
 const ConflictAlert = ({ matchId }: { matchId: string }) => {
   const checkMatchConflicts = useDebateStore((s) => s.checkMatchConflicts);
   const conflicts = useMemo(() => checkMatchConflicts(matchId), [matchId, checkMatchConflicts]);
@@ -41,6 +47,10 @@ const ConflictAlert = ({ matchId }: { matchId: string }) => {
   );
 };
 
+/**
+ * 淘汰赛对阵树视图
+ * 单一职责：以树形结构展示淘汰赛晋级路径
+ */
 const BracketView = ({ matches, getTeamById }: {
   matches: MatchPairing[];
   getTeamById: (id: string) => Team | undefined;
@@ -101,9 +111,13 @@ export default function TournamentPage() {
   const isCurrentRoundFinished = useDebateStore((s) => s.isCurrentRoundFinished);
   const getTeamById = useDebateStore((s) => s.getTeamById);
   const getMatchesByRound = useDebateStore((s) => s.getMatchesByRound);
+  const swapTeamsBetweenMatches = useDebateStore((s) => s.swapTeamsBetweenMatches);
+  const swapMatchSidesInMatch = useDebateStore((s) => s.swapMatchSidesInMatch);
 
   const [activeRound, setActiveRound] = useState<number>(tournament.currentRound);
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('list');
+  const [editMode, setEditMode] = useState(true);
+  const [dragSource, setDragSource] = useState<DragLocation | null>(null);
 
   const totalRounds = tournament.totalRounds;
   const roundList = useMemo(
@@ -118,6 +132,43 @@ export default function TournamentPage() {
 
   const isSingleElim = tournament.type === 'single_elimination';
 
+  /**
+   * 处理拖拽开始
+   */
+  const handleDragStart = useCallback((loc: DragLocation) => {
+    setDragSource(loc);
+  }, []);
+
+  /**
+   * 处理拖拽结束
+   */
+  const handleDragEnd = useCallback(() => {
+    setDragSource(null);
+  }, []);
+
+  /**
+   * 处理队伍放置（交换对阵）
+   */
+  const handleDrop = useCallback((source: DragLocation, target: DragLocation) => {
+    setDragSource(null);
+
+    // 同一场比赛内交换正反方
+    if (source.matchId === target.matchId) {
+      if (source.side !== target.side) {
+        swapMatchSidesInMatch(source.matchId);
+      }
+      return;
+    }
+
+    // 跨比赛交换队伍
+    swapTeamsBetweenMatches(
+      source.matchId,
+      target.matchId,
+      source.side,
+      target.side
+    );
+  }, [swapTeamsBetweenMatches, swapMatchSidesInMatch]);
+
   return (
     <div className="space-y-6">
       <div className="card p-5">
@@ -127,24 +178,39 @@ export default function TournamentPage() {
               <Swords className="w-5 h-5 text-gold-500" />
               赛制编排
             </h2>
-            <p className="text-sm text-navy-500 mt-0.5">配置赛事参数并自动生成对阵</p>
+            <p className="text-sm text-navy-500 mt-0.5">配置赛事参数并自动生成对阵，支持拖拽微调</p>
           </div>
-          {isSingleElim && (
-            <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
+          <div className="flex items-center gap-2">
+            {!isSingleElim && (
               <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+                onClick={() => setEditMode(!editMode)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  editMode
+                    ? 'bg-gold-100 text-gold-700 border border-gold-200'
+                    : 'bg-navy-50 text-navy-600 border border-navy-200'
+                }`}
               >
-                <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
+                <GripVertical className="w-3.5 h-3.5" />
+                {editMode ? '微调模式（开）' : '微调模式（关）'}
               </button>
-              <button
-                onClick={() => setViewMode('tree')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'tree' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
-              >
-                <Sparkles className="w-3.5 h-3.5 inline mr-1" />对阵树视图
-              </button>
-            </div>
-          )}
+            )}
+            {isSingleElim && (
+              <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+                >
+                  <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
+                </button>
+                <button
+                  onClick={() => setViewMode('tree')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'tree' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 inline mr-1" />对阵树视图
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">
@@ -212,6 +278,20 @@ export default function TournamentPage() {
           </div>
         </div>
 
+        {editMode && !isSingleElim && roundMatches.length > 0 && (
+          <div className="mb-4 rounded-lg bg-emerald-50/70 border border-emerald-200 p-3">
+            <div className="flex items-start gap-2">
+              <GripVertical className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-emerald-700">拖拽微调模式已开启</p>
+                <p className="text-[11px] text-emerald-600 mt-0.5">
+                  拖拽队伍卡片可在不同场次间交换队伍位置；同一场次内拖拽可交换正反方立场；点击 ↔ 按钮也可快速交换立场；点击 ↻ 按钮自动重新分配评委
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="pt-3 border-t border-navy-100">
           <button
             onClick={generateNextRound}
@@ -259,6 +339,19 @@ export default function TournamentPage() {
               <BracketView matches={matches} getTeamById={getTeamById} />
             ) : roundMatches.length === 0 ? (
               <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
+            ) : editMode && !isSingleElim ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-fade-in">
+                {roundMatches.map((m) => (
+                  <EditableMatchCard
+                    key={m.id}
+                    matchId={m.id}
+                    dragSource={dragSource}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDrop={handleDrop}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-fade-in">
                 {roundMatches.map((m) => (

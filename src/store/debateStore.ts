@@ -28,6 +28,9 @@ import {
   checkAvoidanceConflicts,
   advanceSingleElimination,
   assignJudges,
+  swapMatchTeams,
+  swapMatchSides,
+  reassignMatchJudges,
 } from '@/engines/tournamentEngine';
 import {
   calculateMatchResult,
@@ -81,6 +84,9 @@ interface DebateState {
   regenerateAllMatches: () => void;
   generateNextRound: () => void;
   updateMatch: (id: string, patch: Partial<MatchPairing>) => void;
+  swapTeamsBetweenMatches: (matchIdA: string, matchIdB: string, sideA: 'pro' | 'con', sideB: 'pro' | 'con') => void;
+  swapMatchSidesInMatch: (matchId: string) => void;
+  autoReassignJudges: (matchId: string) => void;
 
   checkMatchConflicts: (matchId: string) => AvoidanceConflict[];
 
@@ -324,6 +330,59 @@ export const useDebateStore = create<DebateState>()(
         set((s) => ({
           matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
+
+      /**
+       * 拖拽交换两场比赛中的队伍
+       */
+      swapTeamsBetweenMatches: (matchIdA, matchIdB, sideA, sideB) => {
+        set((s) => {
+          const roundMatchA = s.matches.find((m) => m.id === matchIdA);
+          if (!roundMatchA) return s;
+          const sameRoundMatches = s.matches.filter((m) => m.round === roundMatchA.round);
+          return {
+            matches: swapMatchTeams(
+              s.matches,
+              matchIdA,
+              matchIdB,
+              sideA,
+              sideB,
+              s.teams,
+              s.judges,
+              s.tournament.judgesPerMatch
+            ),
+          };
+        });
+      },
+
+      /**
+       * 交换单场比赛中正反方立场
+       */
+      swapMatchSidesInMatch: (matchId) => {
+        set((s) => ({
+          matches: swapMatchSides(s.matches, matchId),
+        }));
+      },
+
+      /**
+       * 自动重新分配评委（避开回避关系）
+       */
+      autoReassignJudges: (matchId) => {
+        set((s) => {
+          const match = s.matches.find((m) => m.id === matchId);
+          if (!match) return s;
+          const sameRoundMatches = s.matches.filter((m) => m.round === match.round);
+          return {
+            matches: reassignMatchJudges(
+              s.matches,
+              matchId,
+              s.teams,
+              s.judges,
+              s.tournament.judgesPerMatch,
+              sameRoundMatches
+            ),
+          };
+        });
+      },
 
       checkMatchConflicts: (matchId) => {
         const s = get();

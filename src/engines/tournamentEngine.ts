@@ -428,3 +428,85 @@ export const advanceSingleElimination = (
     return { ...m, proTeamId: proId, conTeamId: conId };
   });
 };
+
+/**
+ * 交换两场比赛中指定侧的队伍
+ * 用于拖拽微调对阵表
+ */
+export const swapMatchTeams = (
+  pairings: MatchPairing[],
+  matchIdA: string,
+  matchIdB: string,
+  sideA: 'pro' | 'con',
+  sideB: 'pro' | 'con',
+  teams: Team[],
+  judges: Judge[],
+  judgesPerMatch: number
+): MatchPairing[] => {
+  return pairings.map((m) => {
+    if (m.id === matchIdA) {
+      const matchB = pairings.find((x) => x.id === matchIdB);
+      if (!matchB) return m;
+      const teamIdB = sideB === 'pro' ? matchB.proTeamId : matchB.conTeamId;
+      const proTeamId = sideA === 'pro' ? teamIdB : m.proTeamId;
+      const conTeamId = sideA === 'con' ? teamIdB : m.conTeamId;
+      const proTeam = teams.find((t) => t.id === proTeamId) ?? null;
+      const conTeam = teams.find((t) => t.id === conTeamId) ?? null;
+      const newJudgeIds = assignJudges(proTeam, conTeam, judges, [], judgesPerMatch).map((j) => j.id);
+      return { ...m, proTeamId, conTeamId, judgeIds: newJudgeIds };
+    }
+    if (m.id === matchIdB) {
+      const matchA = pairings.find((x) => x.id === matchIdA);
+      if (!matchA) return m;
+      const teamIdA = sideA === 'pro' ? matchA.proTeamId : matchA.conTeamId;
+      const proTeamId = sideB === 'pro' ? teamIdA : m.proTeamId;
+      const conTeamId = sideB === 'con' ? teamIdA : m.conTeamId;
+      const proTeam = teams.find((t) => t.id === proTeamId) ?? null;
+      const conTeam = teams.find((t) => t.id === conTeamId) ?? null;
+      const newJudgeIds = assignJudges(proTeam, conTeam, judges, [], judgesPerMatch).map((j) => j.id);
+      return { ...m, proTeamId, conTeamId, judgeIds: newJudgeIds };
+    }
+    return m;
+  });
+};
+
+/**
+ * 交换单场比赛中正方与反方的立场
+ */
+export const swapMatchSides = (
+  pairings: MatchPairing[],
+  matchId: string
+): MatchPairing[] => {
+  return pairings.map((m) => {
+    if (m.id !== matchId) return m;
+    return {
+      ...m,
+      proTeamId: m.conTeamId,
+      conTeamId: m.proTeamId,
+    };
+  });
+};
+
+/**
+ * 为指定比赛重新分配评委（自动避开回避关系）
+ */
+export const reassignMatchJudges = (
+  pairings: MatchPairing[],
+  matchId: string,
+  teams: Team[],
+  judges: Judge[],
+  judgesPerMatch: number,
+  otherMatchesSameRound: MatchPairing[]
+): MatchPairing[] => {
+  const alreadyAssigned = otherMatchesSameRound
+    .filter((m) => m.id !== matchId)
+    .flatMap((m) => m.judgeIds);
+
+  return pairings.map((m) => {
+    if (m.id !== matchId) return m;
+    const proTeam = teams.find((t) => t.id === m.proTeamId) ?? null;
+    const conTeam = teams.find((t) => t.id === m.conTeamId) ?? null;
+    const newJudgeIds = assignJudges(proTeam, conTeam, judges, alreadyAssigned, judgesPerMatch).map((j) => j.id);
+    return { ...m, judgeIds: newJudgeIds };
+  });
+};

@@ -81,6 +81,8 @@ interface DebateState {
   regenerateAllMatches: () => void;
   generateNextRound: () => void;
   updateMatch: (id: string, patch: Partial<MatchPairing>) => void;
+  swapMatchTeams: (matchId1: string, matchId2: string, side1: 'pro' | 'con', side2: 'pro' | 'con') => void;
+  swapMatchSides: (matchId: string) => void;
 
   checkMatchConflicts: (matchId: string) => AvoidanceConflict[];
 
@@ -324,6 +326,55 @@ export const useDebateStore = create<DebateState>()(
         set((s) => ({
           matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
+
+      /**
+       * 交换两场比赛中指定方的队伍
+       * 用于拖拽微调对阵表
+       */
+      swapMatchTeams: (matchId1, matchId2, side1, side2) => {
+        set((s) => {
+          const matches = [...s.matches];
+          const idx1 = matches.findIndex((m) => m.id === matchId1);
+          const idx2 = matches.findIndex((m) => m.id === matchId2);
+          if (idx1 === -1 || idx2 === -1) return s;
+
+          const m1 = { ...matches[idx1] };
+          const m2 = { ...matches[idx2] };
+
+          const key1 = side1 === 'pro' ? 'proTeamId' : 'conTeamId';
+          const key2 = side2 === 'pro' ? 'proTeamId' : 'conTeamId';
+
+          const tempId = m1[key1];
+          m1[key1] = m2[key2];
+          m2[key2] = tempId;
+
+          m1.judgeIds = [];
+          m2.judgeIds = [];
+
+          matches[idx1] = m1;
+          matches[idx2] = m2;
+
+          return { matches };
+        });
+      },
+
+      /**
+       * 交换单场比赛的正反方
+       */
+      swapMatchSides: (matchId) => {
+        set((s) => {
+          const matches = s.matches.map((m) => {
+            if (m.id !== matchId) return m;
+            return {
+              ...m,
+              proTeamId: m.conTeamId,
+              conTeamId: m.proTeamId,
+              judgeIds: [],
+            };
+          });
+          return { matches };
+        });
+      },
 
       checkMatchConflicts: (matchId) => {
         const s = get();

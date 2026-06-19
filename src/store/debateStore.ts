@@ -81,6 +81,13 @@ interface DebateState {
   regenerateAllMatches: () => void;
   generateNextRound: () => void;
   updateMatch: (id: string, patch: Partial<MatchPairing>) => void;
+  // 拖拽微调对阵：将源比赛指定方位的队伍与目标比赛指定方位的队伍互换
+  swapMatchTeams: (
+    sourceMatchId: string,
+    sourceSide: 'pro' | 'con',
+    targetMatchId: string,
+    targetSide: 'pro' | 'con'
+  ) => void;
 
   checkMatchConflicts: (matchId: string) => AvoidanceConflict[];
 
@@ -324,6 +331,60 @@ export const useDebateStore = create<DebateState>()(
         set((s) => ({
           matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
+
+      // 通过拖拽交换两场比赛中指定方位的队伍，仅作用于「待开始」状态的对阵
+      // 同场比赛内的正反互换也支持（sourceMatchId === targetMatchId）
+      swapMatchTeams: (sourceMatchId, sourceSide, targetMatchId, targetSide) => {
+        set((s) => {
+          const source = s.matches.find((m) => m.id === sourceMatchId);
+          const target = s.matches.find((m) => m.id === targetMatchId);
+          if (!source || !target) return {};
+          // 已开始或已结束的比赛禁止微调，避免影响赛果
+          if (source.status !== 'pending' || target.status !== 'pending') return {};
+          // 同位置同场则不操作
+          if (sourceMatchId === targetMatchId && sourceSide === targetSide) return {};
+
+          const sourceTeamId = sourceSide === 'pro' ? source.proTeamId : source.conTeamId;
+          const targetTeamId = targetSide === 'pro' ? target.proTeamId : target.conTeamId;
+
+          // 构造交换后的对阵对象
+          const buildPatched = (
+            match: MatchPairing,
+            side: 'pro' | 'con',
+            newTeamId: string
+          ): MatchPairing =>
+            side === 'pro'
+              ? { ...match, proTeamId: newTeamId }
+              : { ...match, conTeamId: newTeamId };
+
+          // 同场互换需要在同一对象上修改两个字段
+          if (sourceMatchId === targetMatchId) {
+            const swapped: MatchPairing = {
+              ...source,
+              proTeamId: sourceSide === 'pro' ? targetTeamId : source.proTeamId,
+              conTeamId: sourceSide === 'con' ? targetTeamId : source.conTeamId,
+            };
+            const swapped2: MatchPairing =
+              targetSide === 'pro'
+                ? { ...swapped, proTeamId: sourceTeamId }
+                : { ...swapped, conTeamId: sourceTeamId };
+            return {
+              matches: s.matches.map((m) => (m.id === sourceMatchId ? swapped2 : m)),
+            };
+          }
+
+          const newSource = buildPatched(source, sourceSide, targetTeamId);
+          const newTarget = buildPatched(target, targetSide, sourceTeamId);
+
+          return {
+            matches: s.matches.map((m) => {
+              if (m.id === sourceMatchId) return newSource;
+              if (m.id === targetMatchId) return newTarget;
+              return m;
+            }),
+          };
+        });
+      },
 
       checkMatchConflicts: (matchId) => {
         const s = get();

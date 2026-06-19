@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown, Network } from 'lucide-react';
 import { useDebateStore } from '@/store/debateStore';
 import Modal from '@/components/ui/Modal';
 import Empty from '@/components/ui/Empty';
 import type { Judge } from '@/types';
 import { cn } from '@/lib/utils';
+// 引入回避关系图组件，仅作只读展示，不影响现有数据流
+import AvoidanceGraph from '@/components/judges/AvoidanceGraph';
 
 interface MultiSelectProps {
   label: string;
@@ -65,6 +67,9 @@ export default function JudgesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JudgeFormState>(emptyForm);
+  // 控制回避关系图的显隐 + 聚焦评委
+  const [graphOpen, setGraphOpen] = useState(false);
+  const [graphFocusJudgeId, setGraphFocusJudgeId] = useState<string>('');
 
   const teamOptions = useMemo(
     () => teams.filter((t) => !t.id.startsWith('__')).map((t) => ({ id: t.id, label: t.name })), [teams],
@@ -127,12 +132,46 @@ export default function JudgesPage() {
       </div>
 
       <div className="card p-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400" />
-          <input value={keyword} onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜索姓名或所属机构..." className="input-base pl-10" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400" />
+            <input value={keyword} onChange={(e) => setKeyword(e.target.value)}
+              placeholder="搜索姓名或所属机构..." className="input-base pl-10" />
+          </div>
+          {/* 关系图切换 + 评委筛选 */}
+          <div className="flex items-center gap-2">
+            <select
+              value={graphFocusJudgeId}
+              onChange={(e) => setGraphFocusJudgeId(e.target.value)}
+              className="input-base !w-auto !py-2 text-xs"
+              aria-label="选择要查看关系图的评委"
+            >
+              <option value="">全部评委</option>
+              {judges.map((j) => (
+                <option key={j.id} value={j.id}>{j.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setGraphOpen((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors',
+                graphOpen
+                  ? 'border-gold-300 bg-gold-50 text-gold-700'
+                  : 'border-navy-200 bg-white text-navy-600 hover:bg-navy-50',
+              )}
+            >
+              <Network className="h-4 w-4" />
+              {graphOpen ? '收起关系图' : '查看回避关系图'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* 评委回避关系图：仅在打开时挂载，避免无谓渲染 */}
+      {graphOpen && (
+        <AvoidanceGraph focusJudgeId={graphFocusJudgeId || undefined} />
+      )}
 
       {filtered.length === 0 ? (
         <div className="card">

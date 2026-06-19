@@ -503,3 +503,137 @@ export const calculatePlayerRankings = (
 
   return rankings.map((r, i) => ({ ...r, rank: i + 1 }));
 };
+
+/**
+ * 简化的评委打分表单数据（用于前端提交）
+ */
+export interface JudgeScoreForm {
+  judgeId: string;
+  proScore: number;
+  conScore: number;
+  reasoningScore?: { pro: number; con: number };
+  responseScore?: { pro: number; con: number };
+  expressionScore?: { pro: number; con: number };
+  comment?: string;
+}
+
+/**
+ * 计算单场比赛评委投票统计
+ * 单一职责：根据评委打分计算多数票获胜方和总分
+ */
+export interface MatchJudgeStats {
+  majorityWinner: 'pro' | 'con' | 'tie';
+  proTotal: number;
+  conTotal: number;
+  proVotes: number;
+  conVotes: number;
+  tieVotes: number;
+}
+
+export const calculateMatchJudgeStats = (
+  scores: JudgeScoreForm[]
+): MatchJudgeStats => {
+  if (scores.length === 0) {
+    return {
+      majorityWinner: 'tie',
+      proTotal: 0,
+      conTotal: 0,
+      proVotes: 0,
+      conVotes: 0,
+      tieVotes: 0,
+    };
+  }
+
+  let proTotal = 0;
+  let conTotal = 0;
+  let proVotes = 0;
+  let conVotes = 0;
+  let tieVotes = 0;
+
+  scores.forEach((s) => {
+    proTotal += s.proScore;
+    conTotal += s.conScore;
+    if (s.proScore > s.conScore) proVotes++;
+    else if (s.conScore > s.proScore) conVotes++;
+    else tieVotes++;
+  });
+
+  let majorityWinner: 'pro' | 'con' | 'tie' = 'tie';
+  if (proVotes > conVotes) majorityWinner = 'pro';
+  else if (conVotes > proVotes) majorityWinner = 'con';
+
+  return {
+    majorityWinner,
+    proTotal: Math.round(proTotal / scores.length * 10) / 10,
+    conTotal: Math.round(conTotal / scores.length * 10) / 10,
+    proVotes,
+    conVotes,
+    tieVotes,
+  };
+};
+
+/**
+ * 确定比赛最终结果
+ * 单一职责：从评委打分表单数据计算出完整的比赛结果
+ */
+export interface FinalizedMatchResult {
+  winner: 'pro' | 'con' | 'draw';
+  tie: boolean;
+  proTotal: number;
+  conTotal: number;
+  proJudgeVotes: number;
+  conJudgeVotes: number;
+  proReasoningScores: number[];
+  conReasoningScores: number[];
+  proResponseScores: number[];
+  conResponseScores: number[];
+  proExpressionScores: number[];
+  conExpressionScores: number[];
+}
+
+export const finalizeMatchResult = (
+  scores: JudgeScoreForm[]
+): FinalizedMatchResult => {
+  const stats = calculateMatchJudgeStats(scores);
+
+  const proReasoningScores: number[] = [];
+  const conReasoningScores: number[] = [];
+  const proResponseScores: number[] = [];
+  const conResponseScores: number[] = [];
+  const proExpressionScores: number[] = [];
+  const conExpressionScores: number[] = [];
+
+  scores.forEach((s) => {
+    if (s.reasoningScore) {
+      proReasoningScores.push(s.reasoningScore.pro);
+      conReasoningScores.push(s.reasoningScore.con);
+    }
+    if (s.responseScore) {
+      proResponseScores.push(s.responseScore.pro);
+      conResponseScores.push(s.responseScore.con);
+    }
+    if (s.expressionScore) {
+      proExpressionScores.push(s.expressionScore.pro);
+      conExpressionScores.push(s.expressionScore.con);
+    }
+  });
+
+  const winner: 'pro' | 'con' | 'draw' =
+    stats.majorityWinner === 'pro' ? 'pro' :
+    stats.majorityWinner === 'con' ? 'con' : 'draw';
+
+  return {
+    winner,
+    tie: winner === 'draw',
+    proTotal: stats.proTotal,
+    conTotal: stats.conTotal,
+    proJudgeVotes: stats.proVotes,
+    conJudgeVotes: stats.conVotes,
+    proReasoningScores,
+    conReasoningScores,
+    proResponseScores,
+    conResponseScores,
+    proExpressionScores,
+    conExpressionScores,
+  };
+};

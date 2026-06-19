@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Scale, Check, ChevronDown, Network } from 'lucide-react';
 import { useDebateStore } from '@/store/debateStore';
+import { AvoidanceGraph } from '@/components/judges/AvoidanceGraph';
 import Modal from '@/components/ui/Modal';
 import Empty from '@/components/ui/Empty';
 import type { Judge } from '@/types';
@@ -13,6 +14,10 @@ interface MultiSelectProps {
   onChange: (v: string[]) => void;
 }
 
+/**
+ * 多选下拉组件
+ * 单一职责：提供带复选框的多选交互
+ */
 function MultiSelect({ label, options, value, onChange }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const toggle = (id: string) => {
@@ -65,6 +70,7 @@ export default function JudgesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<JudgeFormState>(emptyForm);
+  const [showGraph, setShowGraph] = useState(true);
 
   const teamOptions = useMemo(
     () => teams.filter((t) => !t.id.startsWith('__')).map((t) => ({ id: t.id, label: t.name })), [teams],
@@ -109,6 +115,26 @@ export default function JudgesPage() {
     setModalOpen(false);
   };
 
+  /**
+   * 计算回避关系统计
+   */
+  const avoidanceStats = useMemo(() => {
+    let totalTeamAvoids = 0;
+    let totalInstAvoids = 0;
+    let totalPlayerAvoids = 0;
+    judges.forEach((j) => {
+      totalTeamAvoids += j.avoidTeams.length;
+      totalInstAvoids += j.avoidInstitutions.length;
+      totalPlayerAvoids += j.avoidPlayers.length;
+    });
+    return {
+      total: totalTeamAvoids + totalInstAvoids + totalPlayerAvoids,
+      teams: totalTeamAvoids,
+      institutions: totalInstAvoids,
+      players: totalPlayerAvoids,
+    };
+  }, [judges]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -118,13 +144,33 @@ export default function JudgesPage() {
           </div>
           <div>
             <h2 className="font-serif text-2xl font-bold text-navy-900">评委管理</h2>
-            <p className="text-sm text-navy-500">共 {judges.length} 位评委</p>
+            <p className="text-sm text-navy-500">
+              共 {judges.length} 位评委
+              {avoidanceStats.total > 0 && ` · ${avoidanceStats.total} 条回避关系`}
+            </p>
           </div>
         </div>
-        <button onClick={openAdd} className="btn-primary">
-          <Plus className="h-4 w-4" />新增评委
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowGraph(!showGraph)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showGraph
+                ? 'bg-gold-100 text-gold-700 border border-gold-200'
+                : 'btn-secondary'
+            }`}
+          >
+            <Network className="h-4 w-4" />
+            {showGraph ? '隐藏关系图' : '显示关系图'}
+          </button>
+          <button onClick={openAdd} className="btn-primary">
+            <Plus className="h-4 w-4" />新增评委
+          </button>
+        </div>
       </div>
+
+      {showGraph && (
+        <AvoidanceGraph judges={judges} teams={teams.filter((t) => !t.id.startsWith('__'))} />
+      )}
 
       <div className="card p-4">
         <div className="relative max-w-md">
@@ -219,6 +265,7 @@ export default function JudgesPage() {
           </div>
           <div className="border-t border-navy-100 pt-4">
             <h4 className="mb-3 text-sm font-semibold text-navy-800">回避配置</h4>
+            <p className="text-xs text-navy-500 mb-3">配置后将在评委分配和回避关系图中自动体现</p>
             <div className="space-y-3.5">
               <MultiSelect label="回避队伍" options={teamOptions} value={form.avoidTeams}
                 onChange={(v) => setForm({ ...form, avoidTeams: v })} />

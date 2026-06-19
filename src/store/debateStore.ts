@@ -81,6 +81,13 @@ interface DebateState {
   regenerateAllMatches: () => void;
   generateNextRound: () => void;
   updateMatch: (id: string, patch: Partial<MatchPairing>) => void;
+  // 拖拽微调对阵：将源比赛指定方位的队伍与目标比赛指定方位的队伍互换
+  swapMatchTeams: (
+    sourceMatchId: string,
+    sourceSide: 'pro' | 'con',
+    targetMatchId: string,
+    targetSide: 'pro' | 'con'
+  ) => void;
 
   checkMatchConflicts: (matchId: string) => AvoidanceConflict[];
 
@@ -324,6 +331,106 @@ export const useDebateStore = create<DebateState>()(
         set((s) => ({
           matches: s.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
+
+      // 通过拖拽交换两场比赛中指定方位的队伍，仅作用于「待开始」状态的对阵
+      // 同场比赛内的正反互换也支持（sourceMatchId === targetMatchId）
+      // 互换完成后会针对受影响的比赛重新分配评委，规避新对阵中可能引入的回避冲突
+      swapMatchTeams: (sourceMatchId, sourceSide, targetMatchId, targetSide) => {
+        set((s) => {
+          const source = s.matches.find((m) => m.id === sourceMatchId);
+          const target = s.matches.find((m) => m.id === targetMatchId);
+          if (!source || !target) return {};
+          // 已开始或已结束的比赛禁止微调，避免影响赛果
+          if (source.status !== 'pending' || target.status !== 'pending') return {};
+          // 同位置同场则不操作
+          if (sourceMatchId === targetMatchId && sourceSide === targetSide) return {};
+
+          const sourceTeamId = sourceSide === 'pro' ? source.proTeamId : source.conTeamId;
+          const targetTeamId = targetSide === 'pro' ? target.proTeamId : target.conTeamId;
+
+          // 工具：根据 teamId 取队伍对象（占位/轮空队伍返回 null，避免影响评委评分）
+          const findTeam = (teamId: string) =>
+            s.teams.find((t) => t.id === teamId) ?? null;
+
+          // 工具：基于交换后的两队，调用引擎重新分配评委
+          // 入参 excludeJudgeIds 用于在跨场互换时避免同一评委被分配到两场新比赛中
+          const reassign = (
+            proTeamId: string,
+            conTeamId: string,
+            excludeJudgeIds: string[],
+            count: number
+          ) =>
+            assignJudges(
+              findTeam(proTeamId),
+              findTeam(conTeamId),
+              s.judges,
+              excludeJudgeIds,
+              count
+            ).map((j) => j.id);
+
+          // 同场互换：仅产生一条新比赛记录（pro/con 字段被交换或替换），重新分配评委
+          if (sourceMatchId === targetMatchId) {
+            const swapped: MatchPairing = {
+              ...source,
+              proTeamId: sourceSide === 'pro' ? targetTeamId : source.proTeamId,
+              conTeamId: sourceSide === 'con' ? targetTeamId : source.conTeamId,
+            };
+            const swapped2: MatchPairing =
+              targetSide === 'pro'
+                ? { ...swapped, proTeamId: sourceTeamId }
+                : { ...swapped, conTeamId: sourceTeamId };
+
+            // 重新分配评委（同场无需排除，count 取原 judgeIds 数）
+            const newJudgeIds = reassign(
+              swapped2.proTeamId,
+              swapped2.conTeamId,
+              [],
+              source.judgeIds.length || s.tournament.judgesPerMatch
+            );
+            const finalMatch: MatchPairing = { ...swapped2, judgeIds: newJudgeIds };
+            return {
+              matches: s.matches.map((m) => (m.id === sourceMatchId ? finalMatch : m)),
+            };
+          }
+
+          // 跨场互换：先得到双方队伍替换后的对阵
+          const newSourceTeams: MatchPairing =
+            sourceSide === 'pro'
+              ? { ...source, proTeamId: targetTeamId }
+              : { ...source, conTeamId: targetTeamId };
+          const newTargetTeams: MatchPairing =
+            targetSide === 'pro'
+              ? { ...target, proTeamId: sourceTeamId }
+              : { ...target, conTeamId: sourceTeamId };
+
+          // 重新分配评委：先给 source 分配，再给 target 分配并排除 source 已用评委
+          // 这样可减少同一轮次中评委重复出现，并自动规避回避冲突
+          const newSourceJudges = reassign(
+            newSourceTeams.proTeamId,
+            newSourceTeams.conTeamId,
+            [],
+            source.judgeIds.length || s.tournament.judgesPerMatch
+          );
+          const newTargetJudges = reassign(
+            newTargetTeams.proTeamId,
+            newTargetTeams.conTeamId,
+            // 同轮次时避免同评委同时被分到两场，跨轮次时不必排除
+            source.round === target.round ? newSourceJudges : [],
+            target.judgeIds.length || s.tournament.judgesPerMatch
+          );
+
+          const finalSource: MatchPairing = { ...newSourceTeams, judgeIds: newSourceJudges };
+          const finalTarget: MatchPairing = { ...newTargetTeams, judgeIds: newTargetJudges };
+
+          return {
+            matches: s.matches.map((m) => {
+              if (m.id === sourceMatchId) return finalSource;
+              if (m.id === targetMatchId) return finalTarget;
+              return m;
+            }),
+          };
+        });
+      },
 
       checkMatchConflicts: (matchId) => {
         const s = get();

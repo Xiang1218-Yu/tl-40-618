@@ -2,8 +2,10 @@ import { useState, useMemo } from 'react';
 import { useDebateStore } from '@/store/debateStore';
 import { MatchCard } from '@/components/cards/MatchCard';
 import Empty from '@/components/ui/Empty';
-import { AlertTriangle, Swords, ListTree, Sparkles, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Swords, ListTree, Sparkles, RefreshCw, Move } from 'lucide-react';
 import type { DebateFormat, TournamentType, MatchPairing, Team } from '@/types';
+// 引入拖拽对阵列表，仅在「拖拽微调」视图下使用
+import DraggableMatchList from '@/components/tournament/DraggableMatchList';
 
 const formatOptions: { value: DebateFormat; label: string }[] = [
   { value: 'parliamentary', label: '议会制' },
@@ -103,7 +105,8 @@ export default function TournamentPage() {
   const getMatchesByRound = useDebateStore((s) => s.getMatchesByRound);
 
   const [activeRound, setActiveRound] = useState<number>(tournament.currentRound);
-  const [viewMode, setViewMode] = useState<'tree' | 'list'>('list');
+  // 视图模式：list=普通列表 / tree=对阵树（仅单败淘汰）/ drag=拖拽微调
+  const [viewMode, setViewMode] = useState<'tree' | 'list' | 'drag'>('list');
 
   const totalRounds = tournament.totalRounds;
   const roundList = useMemo(
@@ -129,22 +132,29 @@ export default function TournamentPage() {
             </h2>
             <p className="text-sm text-navy-500 mt-0.5">配置赛事参数并自动生成对阵</p>
           </div>
-          {isSingleElim && (
-            <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
-              >
-                <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
-              </button>
+          {/* 视图切换：列表 / 拖拽微调 / 对阵树（仅单败淘汰显示）*/}
+          <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+            >
+              <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
+            </button>
+            <button
+              onClick={() => setViewMode('drag')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'drag' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+            >
+              <Move className="w-3.5 h-3.5 inline mr-1" />拖拽微调
+            </button>
+            {isSingleElim && (
               <button
                 onClick={() => setViewMode('tree')}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'tree' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
               >
                 <Sparkles className="w-3.5 h-3.5 inline mr-1" />对阵树视图
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">
@@ -257,6 +267,27 @@ export default function TournamentPage() {
           <div>
             {isSingleElim && viewMode === 'tree' ? (
               <BracketView matches={matches} getTeamById={getTeamById} />
+            ) : viewMode === 'drag' ? (
+              // 拖拽微调视图：
+              // - 单败淘汰：仅展示当前轮（下一轮由胜者推进生成，跨轮拖拽无意义）
+              // - 瑞士赛 / 循环赛：展示全部 pending 对阵，支持跨轮拖拽微调
+              (() => {
+                const dragMatches = isSingleElim
+                  ? roundMatches
+                  : matches.filter((m) => m.status === 'pending');
+                return dragMatches.length === 0 ? (
+                  <Empty
+                    title="暂无可拖拽的对阵"
+                    description={
+                      isSingleElim
+                        ? `第${activeRound}轮尚未生成对阵`
+                        : '所有对阵已开始或已结束，无法拖拽微调'
+                    }
+                  />
+                ) : (
+                  <DraggableMatchList matches={dragMatches} />
+                );
+              })()
             ) : roundMatches.length === 0 ? (
               <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
             ) : (

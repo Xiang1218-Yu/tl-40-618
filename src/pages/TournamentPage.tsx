@@ -268,12 +268,26 @@ export default function TournamentPage() {
             {isSingleElim && viewMode === 'tree' ? (
               <BracketView matches={matches} getTeamById={getTeamById} />
             ) : viewMode === 'drag' ? (
-              // 拖拽微调视图：仅展示当前轮，避免跨轮误操作
-              roundMatches.length === 0 ? (
-                <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
-              ) : (
-                <DraggableMatchList matches={roundMatches} />
-              )
+              // 拖拽微调视图：
+              // - 单败淘汰：仅展示当前轮（下一轮由胜者推进生成，跨轮拖拽无意义）
+              // - 瑞士赛 / 循环赛：展示全部 pending 对阵，支持跨轮拖拽微调
+              (() => {
+                const dragMatches = isSingleElim
+                  ? roundMatches
+                  : matches.filter((m) => m.status === 'pending');
+                return dragMatches.length === 0 ? (
+                  <Empty
+                    title="暂无可拖拽的对阵"
+                    description={
+                      isSingleElim
+                        ? `第${activeRound}轮尚未生成对阵`
+                        : '所有对阵已开始或已结束，无法拖拽微调'
+                    }
+                  />
+                ) : (
+                  <DraggableMatchList matches={dragMatches} />
+                );
+              })()
             ) : roundMatches.length === 0 ? (
               <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
             ) : (

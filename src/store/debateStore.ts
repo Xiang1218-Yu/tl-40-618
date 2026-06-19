@@ -334,6 +334,7 @@ export const useDebateStore = create<DebateState>()(
 
       // 通过拖拽交换两场比赛中指定方位的队伍，仅作用于「待开始」状态的对阵
       // 同场比赛内的正反互换也支持（sourceMatchId === targetMatchId）
+      // 互换完成后会针对受影响的比赛重新分配评委，规避新对阵中可能引入的回避冲突
       swapMatchTeams: (sourceMatchId, sourceSide, targetMatchId, targetSide) => {
         set((s) => {
           const source = s.matches.find((m) => m.id === sourceMatchId);
@@ -347,17 +348,27 @@ export const useDebateStore = create<DebateState>()(
           const sourceTeamId = sourceSide === 'pro' ? source.proTeamId : source.conTeamId;
           const targetTeamId = targetSide === 'pro' ? target.proTeamId : target.conTeamId;
 
-          // 构造交换后的对阵对象
-          const buildPatched = (
-            match: MatchPairing,
-            side: 'pro' | 'con',
-            newTeamId: string
-          ): MatchPairing =>
-            side === 'pro'
-              ? { ...match, proTeamId: newTeamId }
-              : { ...match, conTeamId: newTeamId };
+          // 工具：根据 teamId 取队伍对象（占位/轮空队伍返回 null，避免影响评委评分）
+          const findTeam = (teamId: string) =>
+            s.teams.find((t) => t.id === teamId) ?? null;
 
-          // 同场互换需要在同一对象上修改两个字段
+          // 工具：基于交换后的两队，调用引擎重新分配评委
+          // 入参 excludeJudgeIds 用于在跨场互换时避免同一评委被分配到两场新比赛中
+          const reassign = (
+            proTeamId: string,
+            conTeamId: string,
+            excludeJudgeIds: string[],
+            count: number
+          ) =>
+            assignJudges(
+              findTeam(proTeamId),
+              findTeam(conTeamId),
+              s.judges,
+              excludeJudgeIds,
+              count
+            ).map((j) => j.id);
+
+          // 同场互换：仅产生一条新比赛记录（pro/con 字段被交换或替换），重新分配评委
           if (sourceMatchId === targetMatchId) {
             const swapped: MatchPairing = {
               ...source,
@@ -368,18 +379,53 @@ export const useDebateStore = create<DebateState>()(
               targetSide === 'pro'
                 ? { ...swapped, proTeamId: sourceTeamId }
                 : { ...swapped, conTeamId: sourceTeamId };
+
+            // 重新分配评委（同场无需排除，count 取原 judgeIds 数）
+            const newJudgeIds = reassign(
+              swapped2.proTeamId,
+              swapped2.conTeamId,
+              [],
+              source.judgeIds.length || s.tournament.judgesPerMatch
+            );
+            const finalMatch: MatchPairing = { ...swapped2, judgeIds: newJudgeIds };
             return {
-              matches: s.matches.map((m) => (m.id === sourceMatchId ? swapped2 : m)),
+              matches: s.matches.map((m) => (m.id === sourceMatchId ? finalMatch : m)),
             };
           }
 
-          const newSource = buildPatched(source, sourceSide, targetTeamId);
-          const newTarget = buildPatched(target, targetSide, sourceTeamId);
+          // 跨场互换：先得到双方队伍替换后的对阵
+          const newSourceTeams: MatchPairing =
+            sourceSide === 'pro'
+              ? { ...source, proTeamId: targetTeamId }
+              : { ...source, conTeamId: targetTeamId };
+          const newTargetTeams: MatchPairing =
+            targetSide === 'pro'
+              ? { ...target, proTeamId: sourceTeamId }
+              : { ...target, conTeamId: sourceTeamId };
+
+          // 重新分配评委：先给 source 分配，再给 target 分配并排除 source 已用评委
+          // 这样可减少同一轮次中评委重复出现，并自动规避回避冲突
+          const newSourceJudges = reassign(
+            newSourceTeams.proTeamId,
+            newSourceTeams.conTeamId,
+            [],
+            source.judgeIds.length || s.tournament.judgesPerMatch
+          );
+          const newTargetJudges = reassign(
+            newTargetTeams.proTeamId,
+            newTargetTeams.conTeamId,
+            // 同轮次时避免同评委同时被分到两场，跨轮次时不必排除
+            source.round === target.round ? newSourceJudges : [],
+            target.judgeIds.length || s.tournament.judgesPerMatch
+          );
+
+          const finalSource: MatchPairing = { ...newSourceTeams, judgeIds: newSourceJudges };
+          const finalTarget: MatchPairing = { ...newTargetTeams, judgeIds: newTargetJudges };
 
           return {
             matches: s.matches.map((m) => {
-              if (m.id === sourceMatchId) return newSource;
-              if (m.id === targetMatchId) return newTarget;
+              if (m.id === sourceMatchId) return finalSource;
+              if (m.id === targetMatchId) return finalTarget;
               return m;
             }),
           };

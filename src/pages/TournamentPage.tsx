@@ -1,8 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useDebateStore } from '@/store/debateStore';
 import { MatchCard } from '@/components/cards/MatchCard';
+import { DraggableMatchCard } from '@/components/tournament/DraggableMatchCard';
 import Empty from '@/components/ui/Empty';
-import { AlertTriangle, Swords, ListTree, Sparkles, RefreshCw } from 'lucide-react';
+import {
+  AlertTriangle,
+  Swords,
+  ListTree,
+  Sparkles,
+  RefreshCw,
+  GripVertical,
+  MousePointer,
+} from 'lucide-react';
+import { useMatchDragDrop } from '@/hooks/useMatchDragDrop';
 import type { DebateFormat, TournamentType, MatchPairing, Team } from '@/types';
 
 const formatOptions: { value: DebateFormat; label: string }[] = [
@@ -101,9 +111,14 @@ export default function TournamentPage() {
   const isCurrentRoundFinished = useDebateStore((s) => s.isCurrentRoundFinished);
   const getTeamById = useDebateStore((s) => s.getTeamById);
   const getMatchesByRound = useDebateStore((s) => s.getMatchesByRound);
+  const swapMatchTeams = useDebateStore((s) => s.swapMatchTeams);
 
   const [activeRound, setActiveRound] = useState<number>(tournament.currentRound);
   const [viewMode, setViewMode] = useState<'tree' | 'list'>('list');
+  /**
+   * 编辑模式：'view' 查看模式 | 'edit' 拖拽微调模式
+   */
+  const [editMode, setEditMode] = useState(false);
 
   const totalRounds = tournament.totalRounds;
   const roundList = useMemo(
@@ -118,6 +133,26 @@ export default function TournamentPage() {
 
   const isSingleElim = tournament.type === 'single_elimination';
 
+  /**
+   * 拖拽完成回调
+   * 职责：调用 store 的 swapMatchTeams 执行实际交换
+   */
+  const handleDragDrop = useCallback(
+    (source: { matchId: string; side: 'pro' | 'con' }, target: { matchId: string; side: 'pro' | 'con' }) => {
+      swapMatchTeams(source.matchId, source.side, target.matchId, target.side);
+    },
+    [swapMatchTeams]
+  );
+
+  const dragHandlers = useMatchDragDrop(handleDragDrop);
+
+  /**
+   * 只允许对未开始的比赛进行拖拽微调
+   */
+  const isRoundEditable = useMemo(() => {
+    return roundMatches.every((m) => m.status === 'pending');
+  }, [roundMatches]);
+
   return (
     <div className="space-y-6">
       <div className="card p-5">
@@ -129,22 +164,46 @@ export default function TournamentPage() {
             </h2>
             <p className="text-sm text-navy-500 mt-0.5">配置赛事参数并自动生成对阵</p>
           </div>
-          {isSingleElim && (
-            <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
-              >
-                <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
-              </button>
-              <button
-                onClick={() => setViewMode('tree')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'tree' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
-              >
-                <Sparkles className="w-3.5 h-3.5 inline mr-1" />对阵树视图
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {isSingleElim && (
+              <div className="flex items-center gap-1 rounded-lg bg-navy-50 p-1 mr-2">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+                >
+                  <ListTree className="w-3.5 h-3.5 inline mr-1" />列表视图
+                </button>
+                <button
+                  onClick={() => setViewMode('tree')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${viewMode === 'tree' ? 'bg-white shadow-sm text-navy-900' : 'text-navy-500 hover:text-navy-700'}`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 inline mr-1" />对阵树视图
+                </button>
+              </div>
+            )}
+            {/* 编辑模式切换 */}
+            <button
+              onClick={() => setEditMode(!editMode)}
+              disabled={!isRoundEditable || viewMode === 'tree'}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                editMode
+                  ? 'bg-gold-500 text-white shadow-sm'
+                  : 'bg-navy-50 text-navy-600 hover:bg-navy-100'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              {editMode ? (
+                <>
+                  <MousePointer className="w-3.5 h-3.5" />
+                  退出微调
+                </>
+              ) : (
+                <>
+                  <GripVertical className="w-3.5 h-3.5" />
+                  拖拽微调
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">
@@ -225,6 +284,11 @@ export default function TournamentPage() {
             当前进度：第 {tournament.currentRound} / {totalRounds} 轮
             {!canGenerateNext && tournament.currentRound < totalRounds && '（当前轮未结束）'}
           </span>
+          {editMode && (
+            <span className="ml-3 text-xs text-gold-600 bg-gold-50 px-2 py-1 rounded-full">
+              💡 拖拽队伍卡片可调整对阵
+            </span>
+          )}
         </div>
       </div>
 
@@ -259,6 +323,16 @@ export default function TournamentPage() {
               <BracketView matches={matches} getTeamById={getTeamById} />
             ) : roundMatches.length === 0 ? (
               <Empty title="本轮暂无对阵" description={`第${activeRound}轮尚未生成对阵`} />
+            ) : editMode ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-fade-in">
+                {roundMatches.map((m) => (
+                  <DraggableMatchCard
+                    key={m.id}
+                    matchId={m.id}
+                    dragHandlers={dragHandlers}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-fade-in">
                 {roundMatches.map((m) => (

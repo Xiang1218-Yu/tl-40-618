@@ -85,20 +85,26 @@ export const EditableMatchCard: React.FC<EditableMatchCardProps> = ({
     }
   }, [isEditable, match.id, onSwapSides]);
 
-  const handleDragOver = useCallback((e: React.DragEvent, side: 'pro' | 'con') => {
+  /**
+   * 处理拖拽经过 - 直接透传事件和side参数
+   */
+  const handleDragOver = useCallback((e: React.DragEvent, _matchId: string, side: 'pro' | 'con') => {
     onDragOver(e, match.id, side);
   }, [match.id, onDragOver]);
 
-  const handleDrop = useCallback((e: React.DragEvent, side: 'pro' | 'con') => {
+  /**
+   * 处理放置事件 - 直接透传事件和side参数
+   */
+  const handleDrop = useCallback((e: React.DragEvent, _matchId: string, side: 'pro' | 'con') => {
     onDrop(e, match.id, side);
   }, [match.id, onDrop]);
 
-  const handleDragStart = useCallback((side: 'pro' | 'con', teamId: string) => {
-    const team = side === 'pro' ? proTeam : conTeam;
-    if (team) {
-      onDragStart(match.id, side, teamId);
-    }
-  }, [conTeam, match.id, onDragStart, proTeam]);
+  /**
+   * 处理拖拽开始 - 直接透传参数，不做二次包装避免参数错位
+   */
+  const handleDragStart = useCallback((_matchId: string, side: 'pro' | 'con', teamId: string) => {
+    onDragStart(match.id, side, teamId);
+  }, [match.id, onDragStart]);
 
   return (
     <div className="card p-4 transition-all duration-200">

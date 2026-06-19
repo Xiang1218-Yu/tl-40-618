@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 /**
  * 拖拽源数据类型
@@ -21,24 +21,50 @@ export interface DropTarget {
 /**
  * 拖拽状态管理Hook
  * 遵循单一职责原则：仅管理拖拽源状态和拖拽事件
+ * 使用useRef存储最新状态以避免React事件闭包陷阱
  */
 export function useDragAndDrop<T extends DragSource>() {
-  const [dragSource, setDragSource] = useState<T | null>(null);
-  const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
+  const [dragSource, setDragSourceState] = useState<T | null>(null);
+  const [dragOverTarget, setDragOverTargetState] = useState<DropTarget | null>(null);
+
+  /**
+   * 使用ref保存最新状态，确保事件处理器总能访问到当前值
+   */
+  const dragSourceRef = useRef<T | null>(null);
+  const dragOverTargetRef = useRef<DropTarget | null>(null);
+
+  /**
+   * 设置拖拽源状态（同时更新ref）
+   */
+  const setDragSource = useCallback((source: T | null) => {
+    dragSourceRef.current = source;
+    setDragSourceState(source);
+  }, []);
+
+  /**
+   * 设置悬停目标状态（同时更新ref）
+   */
+  const setDragOverTarget = useCallback((target: DropTarget | null) => {
+    dragOverTargetRef.current = target;
+    setDragOverTargetState(target);
+  }, []);
 
   /**
    * 开始拖拽
    */
   const handleDragStart = useCallback((source: T) => {
-    setDragSource(source);
+    dragSourceRef.current = source;
+    setDragSourceState(source);
   }, []);
 
   /**
    * 拖拽结束
    */
   const handleDragEnd = useCallback(() => {
-    setDragSource(null);
-    setDragOverTarget(null);
+    dragSourceRef.current = null;
+    dragOverTargetRef.current = null;
+    setDragSourceState(null);
+    setDragOverTargetState(null);
   }, []);
 
   /**
@@ -47,42 +73,50 @@ export function useDragAndDrop<T extends DragSource>() {
   const handleDragOver = useCallback((e: React.DragEvent, target: DropTarget) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverTarget(target);
+    dragOverTargetRef.current = target;
+    setDragOverTargetState(target);
   }, []);
 
   /**
    * 离开目标区域
    */
   const handleDragLeave = useCallback(() => {
-    setDragOverTarget(null);
+    dragOverTargetRef.current = null;
+    setDragOverTargetState(null);
   }, []);
 
   /**
    * 放置到目标区域，返回源和目标用于执行交换
+   * 使用ref读取最新dragSource避免闭包问题
    */
   const handleDrop = useCallback((e: React.DragEvent, target: DropTarget): { source: T; target: DropTarget } | null => {
     e.preventDefault();
-    if (!dragSource) return null;
+    const source = dragSourceRef.current;
+    if (!source) return null;
 
-    const result = { source: dragSource, target };
-    setDragSource(null);
-    setDragOverTarget(null);
+    const result = { source, target };
+    dragSourceRef.current = null;
+    dragOverTargetRef.current = null;
+    setDragSourceState(null);
+    setDragOverTargetState(null);
     return result;
-  }, [dragSource]);
+  }, []);
 
   /**
    * 判断某个位置是否是当前拖拽悬停的目标
    */
   const isDragOver = useCallback((matchId: string, side: 'pro' | 'con'): boolean => {
-    return dragOverTarget?.matchId === matchId && dragOverTarget?.side === side;
-  }, [dragOverTarget]);
+    const target = dragOverTargetRef.current;
+    return target?.matchId === matchId && target?.side === side;
+  }, []);
 
   /**
    * 判断某个位置是否是拖拽源
    */
   const isDragging = useCallback((matchId: string, side: 'pro' | 'con'): boolean => {
-    return dragSource?.matchId === matchId && dragSource?.side === side;
-  }, [dragSource]);
+    const source = dragSourceRef.current;
+    return source?.matchId === matchId && source?.side === side;
+  }, []);
 
   return {
     dragSource,

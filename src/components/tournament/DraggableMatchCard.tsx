@@ -99,18 +99,17 @@ interface DraggableMatchCardProps {
     isHovering: (matchId: string, side: 'pro' | 'con') => boolean;
     isDragging: (matchId: string, side: 'pro' | 'con') => boolean;
   };
-  showConflictAlert?: boolean;
 }
 
 /**
  * 可拖拽对阵卡片组件
  * 职责：渲染单场比赛，提供正反方两个拖拽槽位
  * 单一职责：不处理拖拽逻辑本身，由 hook 注入 handlers
+ * 注意：始终内置冲突告警显示，便于微调时实时查看回避冲突
  */
 export function DraggableMatchCard({
   matchId,
   dragHandlers,
-  showConflictAlert = true,
 }: DraggableMatchCardProps) {
   const matches = useDebateStore((s) => s.matches);
   const getTeamById = useDebateStore((s) => s.getTeamById);
@@ -143,9 +142,12 @@ export function DraggableMatchCard({
     return match.judgeIds.filter((id) => getJudgeById(id)).length;
   }, [match, getJudgeById]);
 
+  /**
+   * 实时计算冲突，拖拽微调时也能看到告警
+   */
   const conflicts = useMemo(
-    () => (showConflictAlert ? checkMatchConflicts(matchId) : []),
-    [matchId, checkMatchConflicts, showConflictAlert]
+    () => checkMatchConflicts(matchId),
+    [matchId, checkMatchConflicts]
   );
 
   if (!match || !proTeam || !conTeam || !topic) {

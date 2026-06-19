@@ -330,7 +330,6 @@ export default function TournamentPage() {
                     key={m.id}
                     matchId={m.id}
                     dragHandlers={dragHandlers}
-                    showConflictAlert={false}
                   />
                 ))}
               </div>

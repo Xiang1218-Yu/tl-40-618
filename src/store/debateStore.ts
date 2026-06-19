@@ -342,6 +342,10 @@ export const useDebateStore = create<DebateState>()(
       /**
        * 交换两场比赛中的队伍
        * 职责：仅处理队伍ID交换，不涉及UI拖拽逻辑（单一职责）
+       * 支持场景：
+       *   1. 跨场交换：不同比赛之间的任意位置交换
+       *   2. 同场正反交换：同一场比赛内正方反方互换
+       *   3. 同位置交换：源和目标为同一位置时不做操作
        */
       swapMatchTeams: (sourceMatchId, sourceSide, targetMatchId, targetSide) => {
         set((s) => {
@@ -351,20 +355,36 @@ export const useDebateStore = create<DebateState>()(
 
           if (sourceIdx === -1 || targetIdx === -1) return s;
 
-          const sourceMatch = { ...matches[sourceIdx] };
-          const targetMatch = { ...matches[targetIdx] };
-
           const sourceKey = sourceSide === 'pro' ? 'proTeamId' : 'conTeamId';
           const targetKey = targetSide === 'pro' ? 'proTeamId' : 'conTeamId';
 
-          const sourceTeamId = sourceMatch[sourceKey];
-          const targetTeamId = targetMatch[targetKey];
+          // 同一位置直接返回
+          if (sourceMatchId === targetMatchId && sourceSide === targetSide) {
+            return s;
+          }
 
-          sourceMatch[sourceKey] = targetTeamId;
-          targetMatch[targetKey] = sourceTeamId;
+          if (sourceMatchId === targetMatchId) {
+            // 同场正反交换：直接在同一对象上交换两个字段，避免副本覆盖问题
+            const match = { ...matches[sourceIdx] };
+            const proId = match.proTeamId;
+            const conId = match.conTeamId;
+            match.proTeamId = conId;
+            match.conTeamId = proId;
+            matches[sourceIdx] = match;
+          } else {
+            // 跨场交换：两个独立对象，分别赋值后写回
+            const sourceMatch = { ...matches[sourceIdx] };
+            const targetMatch = { ...matches[targetIdx] };
 
-          matches[sourceIdx] = sourceMatch;
-          matches[targetIdx] = targetMatch;
+            const sourceTeamId = sourceMatch[sourceKey];
+            const targetTeamId = targetMatch[targetKey];
+
+            sourceMatch[sourceKey] = targetTeamId;
+            targetMatch[targetKey] = sourceTeamId;
+
+            matches[sourceIdx] = sourceMatch;
+            matches[targetIdx] = targetMatch;
+          }
 
           return { matches };
         });
